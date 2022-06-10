@@ -36,8 +36,7 @@ const FormTitle = findModuleByDisplayName('FormTitle');
 const FormText = findModuleByDisplayName('FormText');
 const SwitchItem = findModuleByDisplayName('SwitchItem');
 const SystemMessageContextMenu = findModuleByDisplayName('SystemMessageContextMenu');
-//lazy hotfix to deal with MessageContextMenu module being lazy loaded
-let MessageContextMenu;
+const MessageContextMenu = findModuleByDisplayName('MessageContextMenu');
 const { default: HelpMessage, HelpMessageTypes } = findModuleByProps('HelpMessageTypes');
 const {
     MessageAccessories: { prototype: MessageAccessoriesRenderer },
@@ -78,7 +77,7 @@ const PluginStore = new (class EmbeddedMessagesStore extends EventEmitter {
         maxDepth: 3,
     };
 
-    #embeddedMessages = {
+    embeddedMessages = {
         get(channelId, messageId) {
             return this[channelId + messageId];
         },
@@ -100,8 +99,8 @@ const PluginStore = new (class EmbeddedMessagesStore extends EventEmitter {
     async fetchMessage(channelId, messageId) {
         const { WARNING, ERROR } = HelpMessageTypes;
         const { REPLY_QUOTE_MESSAGE_DELETED, REPLY_QUOTE_MESSAGE_NOT_LOADED } = Messages;
-        if (this.#embeddedMessages.get(channelId, messageId)?.status === MessageStatus.FETCHING) return;
-        this.#embeddedMessages.set(channelId, messageId, {
+        if (this.embeddedMessages.get(channelId, messageId)?.status === MessageStatus.FETCHING) return;
+        this.embeddedMessages.set(channelId, messageId, {
             status: MessageStatus.FETCHING,
         });
 
@@ -157,12 +156,12 @@ const PluginStore = new (class EmbeddedMessagesStore extends EventEmitter {
     getMessage(channelId, messageId) {
         const loadedMessage = MessageStore?.getMessage(channelId, messageId);
         if (loadedMessage)
-            this.#embeddedMessages.set(channelId, messageId, {
+            this.embeddedMessages.set(channelId, messageId, {
                 status: MessageStatus.RECEIVED,
                 message: loadedMessage,
             });
 
-        const message = this.#embeddedMessages.get(channelId, messageId);
+        const message = this.embeddedMessages.get(channelId, messageId);
         if (message) return message;
 
         this.fetchMessage(channelId, messageId);
@@ -170,12 +169,12 @@ const PluginStore = new (class EmbeddedMessagesStore extends EventEmitter {
     }
 
     updateMessage(channelId, messageId, updatedMessage) {
-        this.#embeddedMessages.set(channelId, messageId, updatedMessage);
+        this.embeddedMessages.set(channelId, messageId, updatedMessage);
         this.emit(this.Event.MESSAGE_UPDATE);
     }
 
     hasMessage(channelId, messageId) {
-        const message = this.#embeddedMessages.get(channelId, messageId);
+        const message = this.embeddedMessages.get(channelId, messageId);
         return !!message && message.status !== MessageStatus.FETCHING && message.status !== MessageStatus.ERROR;
     }
 
@@ -566,7 +565,6 @@ const subscriptions = {
 
 module.exports = class {
     start() {
-        MessageContextMenu = findModuleByDisplayName('MessageContextMenu');
         Object.entries(subscriptions).forEach(([action, callback]) => Dispatcher.subscribe(action, callback));
         Patcher.instead(PLUGIN_ID, MessageContent, 'type', patchMessageContent);
         Patcher.after(PLUGIN_ID, MessageAccessoriesRenderer, 'render', patchEmbeds);
